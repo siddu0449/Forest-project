@@ -29,26 +29,37 @@ export default function GateDashboard() {
   };
 
   // Filter visitors for selected date and payment done
-  const gateVisitors = useMemo(() => {
-    return visitors
-      .filter((v) => v.safariDate === selectedDate && v.paymentDone)
-      .map((v) => {
-        // Find vehicle info for this visitor
-        let vehicleNumber = "";
-        let driverName = "";
+ // Filter visitors for selected date and payment done
+const gateVisitors = useMemo(() => {
+  return visitors
+    .filter((v) => v.safariDate === selectedDate && v.paymentDone)
+    .map((v) => {
+      // Find vehicle info for this visitor
+      let vehicleNumber = "";
+      let driverName = "";
 
-        for (const veh of vehicles) {
-          const passenger = veh.passengers.find((p) => p.name === v.name && p.phone === v.phone);
-          if (passenger) {
+      for (const veh of vehicles) {
+        const passenger = veh.passengers.find(
+          (p) => p.name === v.name && p.phone === v.phone
+        );
+        if (passenger) {
+          // Only assign vehicle if driverName exists
+          if (veh.driverName) {
             vehicleNumber = veh.vehicleNumber;
             driverName = veh.driverName;
-            break;
           }
+          break;
         }
+      }
 
-        return { ...v, vehicle: vehicleNumber, driver: driverName };
-      });
-  }, [visitors, vehicles, selectedDate]);
+      // Skip visitors whose assigned vehicle has no driver
+      if (!driverName) return null;
+
+      return { ...v, vehicle: vehicleNumber, driver: driverName };
+    })
+    .filter(Boolean); // remove nulls
+}, [visitors, vehicles, selectedDate]);
+
 
   const updateStorage = (updated) => {
     localStorage.setItem("visitorList", JSON.stringify(updated));
