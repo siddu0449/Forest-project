@@ -157,6 +157,27 @@ export default function ReceptionDashboard() {
     setVehicles(updated);
     localStorage.setItem("vehicles", JSON.stringify(updated));
   };
+ /* --------------------force  MOVE SAFARI -------------------- */
+ const forceMoveToSafari = vehicleNumber => {
+  const vehicle = vehicles.find(v => v.vehicleNumber === vehicleNumber);
+
+  if (!vehicle.driverName) {
+    return alert("Select driver first");
+  }
+
+  if (vehicle.passengers.length === 0) {
+    return alert("No passengers in vehicle");
+  }
+
+  const updated = vehicles.map(v =>
+    v.vehicleNumber === vehicleNumber
+      ? { ...v, status: "moved" }
+      : v
+  );
+
+  setVehicles(updated);
+  localStorage.setItem("vehicles", JSON.stringify(updated));
+};
 
   /* -------------------- RENDER -------------------- */
   return (
@@ -288,6 +309,7 @@ export default function ReceptionDashboard() {
 
           {vehicles
             .filter(v =>
+              
               v.passengers.some(p => {
                 const vis = visitors.find(
                   vis => vis.name === p.name && vis.phone === p.phone
@@ -359,6 +381,18 @@ export default function ReceptionDashboard() {
                     >
                       {isMoved ? "Moved" : "Move to Safari"}
                     </button>
+                    <button
+  onClick={() => forceMoveToSafari(v.vehicleNumber)}
+  disabled={!v.driverName || isMoved}
+  className={`px-4 py-1 rounded text-white ${
+    !isMoved && v.driverName
+      ? "bg-red-600 hover:bg-red-700"
+      : "bg-gray-300"
+  }`}
+>
+  Force Move
+</button>
+
                   </div>
                 </details>
               );
