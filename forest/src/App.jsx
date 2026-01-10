@@ -5,37 +5,35 @@ import Navbar from "./Components/Nabvbar/Navabar";
 import ExternalVisitor from "./Components/Extrnal visitor/Extrnalpage";
 import Login from "./Components/Login/Login";
 import ReceptionDashboard from "./Components/ReceptionDashboard/ReceptionDashboard";
-import GateDashboard from "./Components/GateDashboard/GateDashboard"; // import GateDashboard
+import GateDashboard from "./Components/GateDashboard/GateDashboard";
+import ManagerDashboard from "./Components/ManagerDashboard/ManagerDashboard";
+import ManageVehicleDriver from "./Components/ManagerDashboard/ManageVehicleDriver";
+import PasswordManagement from "./Components/ManagerDashboard/PasswordManagement";
 
-import { ROLES } from "./Components/constants/roles"; // only roles
-import { isLoggedIn } from "./utils/auth"; // auth functions
+import { ROLES } from "./Components/constants/roles";
+import { isLoggedIn } from "./utils/auth";
 
-// ProtectedRoute component
+// 🔐 ProtectedRoute
 const ProtectedRoute = ({ children, role }) => {
   const loggedIn = isLoggedIn();
   const userRole = localStorage.getItem("userRole");
 
-  // Not logged in -> redirect to login
   if (!loggedIn) return <Navigate to="/login" />;
-
-  // Logged in but role does not match -> redirect to login
   if (role && userRole !== role) return <Navigate to="/login" />;
 
-  // Access granted
   return children;
 };
 
 function App() {
   return (
     <BrowserRouter>
-      {/* Navbar visible on all pages */}
       <Navbar />
 
       <Routes>
-        {/* External Visitor page */}
+        {/* External Visitor */}
         <Route path="/" element={<ExternalVisitor />} />
 
-        {/* Reception dashboard - only accessible by Reception role */}
+        {/* Reception */}
         <Route
           path="/reception"
           element={
@@ -45,7 +43,40 @@ function App() {
           }
         />
 
-        {/* Gate dashboard - only accessible by Gate role */}
+        {/* ✅ Manager Routes */}
+        <Route
+          path="/manager"
+          element={<Navigate to="/manager/dashboard" />}
+        />
+
+        <Route
+          path="/manager/dashboard"
+          element={
+            <ProtectedRoute role={ROLES.MANAGER}>
+              <ManagerDashboard />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/manager/manage"
+          element={
+            <ProtectedRoute role={ROLES.MANAGER}>
+              <ManageVehicleDriver />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/manager/password"
+          element={
+            <ProtectedRoute role={ROLES.MANAGER}>
+              <PasswordManagement />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Gate */}
         <Route
           path="/gate"
           element={
@@ -55,10 +86,10 @@ function App() {
           }
         />
 
-        {/* Login page */}
+        {/* Login */}
         <Route path="/login" element={<Login />} />
 
-        {/* Fallback - redirect unknown routes to login */}
+        {/* Fallback */}
         <Route path="*" element={<Navigate to="/login" />} />
       </Routes>
     </BrowserRouter>

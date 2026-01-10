@@ -9,19 +9,17 @@ export default function Navbar() {
     <nav className="bg-green-700 text-white px-4 sm:px-6 md:px-8 py-3 sm:py-4 flex items-center justify-between shadow-md flex-wrap">
       
       {/* Left side: Logo + Text */}
-      <div
-        className="flex items-center cursor-pointer flex-shrink-0"
-        onClick={() => navigate("/")}
-      >
-        <img
-          src={forestLogo}
-          alt="Forest Logo"
-          className="h-8 w-8 sm:h-10 sm:w-10 md:h-12 md:w-12 object-contain mr-2 sm:mr-3"
-        />
-        <h1 className="text-sm sm:text-base md:text-lg lg:text-xl font-bold">
-          Karnataka State Forest Department
-        </h1>
-      </div>
+      <div className="flex items-center flex-shrink-0">
+  <img
+    src={forestLogo}
+    alt="Forest Logo"
+    className="h-8 w-8 sm:h-10 sm:w-10 md:h-12 md:w-12 object-contain mr-2 sm:mr-3"
+  />
+  <h1 className="text-sm sm:text-base md:text-lg lg:text-xl font-bold">
+    Karnataka State Forest Department
+  </h1>
+</div>
+
 
       {/* Right side: Login/Logout */}
       <div className="flex items-center flex-shrink-0 ml-2">
