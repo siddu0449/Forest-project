@@ -48,4 +48,11 @@ router.post(
  */
 router.put("/:bookingId/confirm-payment", bookingController.confirmPayment);
 
+/**
+ * @route   DELETE /api/bookings/:id
+ * @desc    Delete a booking (for expired bookings)
+ * @access  Private (Admin, Reception)
+ */
+router.delete("/:id", bookingController.deleteBooking);
+
 module.exports = router;

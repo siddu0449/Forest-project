@@ -360,3 +360,35 @@ exports.getAllBookings = async (req, res) => {
     });
   }
 };
+/**
+ * Delete a booking (for expired bookings)
+ */
+exports.deleteBooking = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const booking = await VisitorBooking.findByPk(id);
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "Booking not found",
+      });
+    }
+
+    // Delete the booking (IndividualTokens will be deleted automatically due to CASCADE)
+    await booking.destroy();
+
+    res.status(200).json({
+      success: true,
+      message: `Booking #${booking.token} deleted successfully`,
+    });
+  } catch (error) {
+    console.error("Delete booking error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete booking",
+      error: error.message,
+    });
+  }
+};

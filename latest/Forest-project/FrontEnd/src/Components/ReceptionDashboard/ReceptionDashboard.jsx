@@ -152,8 +152,22 @@ export default function ReceptionDashboard() {
 
   /* -------------------- TIMER (FIXED) -------------------- */
   useEffect(() => {
-    const interval = setInterval(() => {
+    const interval = setInterval(async () => {
       setVisitors(prev => {
+        const expiredBookings = prev.filter(v => v.timeLeft === 1 && !v.paymentDone);
+        
+        // Delete expired bookings from database
+        expiredBookings.forEach(async (booking) => {
+          try {
+            await fetch(`${API_URL}/bookings/${booking.id}`, {
+              method: 'DELETE'
+            });
+            console.log(`🗑️ Deleted expired booking: Token #${booking.token}`);
+          } catch (error) {
+            console.error('Failed to delete expired booking:', error);
+          }
+        });
+
         const updated = prev
           .map(v => {
             if (!v.paymentDone && typeof v.timeLeft === "number" && v.timeLeft > 0) {
@@ -680,15 +694,69 @@ export default function ReceptionDashboard() {
               Paid Bookings - Assign to Vehicle
             </h3>
             
-            {filteredVisitors.filter(v => v.paymentDone && (!v.vehicleAssigned || v.remainingSeats > 0)).length === 0 ? (
+            {filteredVisitors.filter(v => {
+              if (!v.paymentDone) return false;
+              
+              // Get all passengers assigned to this token across all vehicles
+              const assignedPassengers = vehicles.flatMap(vehicle => 
+                vehicle.passengers?.filter(p => p.token === v.token) || []
+              );
+              
+              // If no assignments yet, show the token
+              if (assignedPassengers.length === 0) return true;
+              
+              // Count passengers in completed vs non-completed safaris
+              const passengersInCompleted = vehicles
+                .filter(vehicle => vehicle.safariStatus === 'completed')
+                .flatMap(vehicle => vehicle.passengers?.filter(p => p.token === v.token) || [])
+                .length;
+              
+              const totalAssignedPassengers = assignedPassengers.length;
+              
+              // Hide token if ALL passengers have completed safari
+              if (passengersInCompleted >= v.totalSeats && totalAssignedPassengers >= v.totalSeats) {
+                return false;
+              }
+              
+              return true;
+            }).length === 0 ? (
               <p className="text-gray-500">No paid bookings pending vehicle assignment</p>
             ) : (
               <div className="space-y-2">
                 {filteredVisitors
-                  .filter(v => v.paymentDone && (!v.vehicleAssigned || v.remainingSeats > 0))
+                  .filter(v => {
+                    if (!v.paymentDone) return false;
+                    
+                    // Get all passengers assigned to this token across all vehicles
+                    const assignedPassengers = vehicles.flatMap(vehicle => 
+                      vehicle.passengers?.filter(p => p.token === v.token) || []
+                    );
+                    
+                    // If no assignments yet, show the token
+                    if (assignedPassengers.length === 0) return true;
+                    
+                    // Count passengers in completed vs non-completed safaris
+                    const passengersInCompleted = vehicles
+                      .filter(vehicle => vehicle.safariStatus === 'completed')
+                      .flatMap(vehicle => vehicle.passengers?.filter(p => p.token === v.token) || [])
+                      .length;
+                    
+                    const totalAssignedPassengers = assignedPassengers.length;
+                    
+                    // Hide token if ALL passengers have completed safari
+                    if (passengersInCompleted >= v.totalSeats && totalAssignedPassengers >= v.totalSeats) {
+                      return false;
+                    }
+                    
+                    return true;
+                  })
                   .map(v => {
-                    const assignedSeats = v.totalSeats - (v.remainingSeats || 0);
-                    const isPartial = v.remainingSeats > 0;
+                    const assignedPassengers = vehicles.flatMap(vehicle => 
+                      vehicle.passengers?.filter(p => p.token === v.token) || []
+                    );
+                    const assignedSeats = assignedPassengers.length;
+                    const remainingSeats = v.totalSeats - assignedSeats;
+                    const isPartial = remainingSeats > 0 && assignedSeats > 0;
                     
                     // Get all vehicles with available space (both new and partially filled)
                     const vehiclesWithSpace = [
@@ -738,6 +806,20 @@ export default function ReceptionDashboard() {
                       }
                     });
                     
+                    // Check if still need to assign (has remaining seats not in completed safaris)
+                    const passengersInCompleted = vehicles
+                      .filter(vehicle => vehicle.safariStatus === 'completed')
+                      .flatMap(vehicle => vehicle.passengers?.filter(p => p.token === v.token) || [])
+                      .length;
+                    
+                    const passengersInActive = vehicles
+                      .filter(vehicle => vehicle.safariStatus !== 'completed')
+                      .flatMap(vehicle => vehicle.passengers?.filter(p => p.token === v.token) || [])
+                      .length;
+                    
+                    const totalInSafari = passengersInCompleted + passengersInActive;
+                    const needsMoreAssignment = remainingSeats > 0 || (assignedSeats === 0 && passengersInCompleted === 0);
+                    
                     return (
                     <div key={v.id} className={`bg-white p-3 rounded border flex items-center justify-between ${isPartial ? 'border-orange-400 border-2' : ''}`}>
                       <div className="flex-1">
@@ -750,16 +832,25 @@ export default function ReceptionDashboard() {
                               ⚠️ {assignedSeats}/{v.totalSeats} assigned
                             </span>
                             <span className="font-semibold bg-red-100 px-2 py-1 rounded text-sm text-red-800">
-                              {v.remainingSeats} seats pending
+                              {remainingSeats} seats pending
                             </span>
                           </>
-                        ) : (
+                        ) : assignedSeats === 0 ? (
                           <span className="font-semibold bg-green-100 px-2 py-1 rounded text-sm">
                             {v.totalSeats} seats ({v.adults} adults, {v.children} children)
+                          </span>
+                        ) : passengersInActive > 0 ? (
+                          <span className="font-semibold bg-yellow-100 px-2 py-1 rounded text-sm text-yellow-800">
+                            🟡 In Safari - All assigned
+                          </span>
+                        ) : (
+                          <span className="font-semibold bg-green-100 px-2 py-1 rounded text-sm text-green-800">
+                            ✅ Completed
                           </span>
                         )}
                       </div>
                       <div className="flex gap-2">
+                        {needsMoreAssignment ? (
                         <select
                           onChange={e => {
                             if (e.target.value) {
@@ -790,6 +881,11 @@ export default function ReceptionDashboard() {
                             </>
                           )}
                         </select>
+                        ) : (
+                          <span className="text-sm text-gray-500 italic px-3 py-2">
+                            No action needed
+                          </span>
+                        )}
                       </div>
                     </div>
                   );
@@ -929,29 +1025,29 @@ export default function ReceptionDashboard() {
                       </div>
 
                       {/* Action Buttons */}
-                      <div className="flex gap-2 mt-4">
+                      <div className="flex gap-3 mt-4">
                         <button
                           onClick={() => moveToSafari(v.vehicleId || v.vehicleNumber)}
                           disabled={v.seatsFilled !== v.capacity || !v.driverName || isGrayedOut}
-                          className={`px-4 py-2 rounded text-white font-semibold ${
+                          className={`px-6 py-3 rounded-lg font-bold text-sm transition-all ${
                             v.seatsFilled === v.capacity && v.driverName && !isGrayedOut
-                              ? "bg-green-600 hover:bg-green-700"
-                              : "bg-gray-300 cursor-not-allowed"
+                              ? "bg-green-600 hover:bg-green-700 text-white shadow-md"
+                              : "bg-gray-300 text-gray-500 cursor-not-allowed"
                           }`}
                         >
-                          {isGrayedOut ? "✓ On Safari" : "Move to Safari"}
+                          {isGrayedOut ? "✓ On Safari" : "Move to Safari (Full)"}
                         </button>
                         
                         <button
                           onClick={() => forceMoveToSafari(v.vehicleId || v.vehicleNumber)}
                           disabled={!v.driverName || isGrayedOut || v.seatsFilled === 0}
-                          className={`px-4 py-2 rounded text-white font-semibold ${
+                          className={`px-6 py-3 rounded-lg font-bold text-sm border-2 transition-all ${
                             !isGrayedOut && v.driverName && v.seatsFilled > 0
-                              ? "bg-orange-600 hover:bg-orange-700"
-                              : "bg-gray-300 cursor-not-allowed"
+                              ? "bg-orange-500 hover:bg-orange-600 text-white border-orange-700 shadow-md"
+                              : "bg-gray-200 text-gray-400 border-gray-300 cursor-not-allowed"
                           }`}
                         >
-                          Force Move ({v.seatsFilled} seats)
+                          🚀 Force Move ({v.seatsFilled}/{v.capacity} seats)
                         </button>
                       </div>
                     </div>

@@ -12,6 +12,8 @@ db.IndividualToken = require("./IndividualToken");
 db.Driver = require("./Driver");
 db.Vehicle = require("./Vehicle");
 db.VehicleAssignment = require("./VehicleAssignment");
+db.UserCredential = require("./UserCredential");
+db.SecurityQuestion = require("./SecurityQuestion");
 
 // Define associations
 db.VisitorBooking.hasMany(db.IndividualToken, {
