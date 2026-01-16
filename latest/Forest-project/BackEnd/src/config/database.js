@@ -25,8 +25,12 @@ const connectDB = async () => {
     console.log("✅ Database connection established successfully.");
 
     // Sync models with database
-    await sequelize.sync({ alter: false }); // Set to true for development to auto-update schema
+    await sequelize.sync({ force: false }); // Set force to true to drop and recreate tables (use with caution)
     console.log("✅ All models synchronized.");
+
+    // Initialize default credentials and security question
+    const { initializeCredentials } = require("../controllers/authController");
+    await initializeCredentials();
   } catch (error) {
     console.error("❌ Unable to connect to the database:", error);
     process.exit(1);

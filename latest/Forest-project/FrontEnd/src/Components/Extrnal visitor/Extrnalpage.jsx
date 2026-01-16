@@ -288,7 +288,7 @@ export default function ExternalVisitor() {
             <div className="flex gap-2">
               <div className="flex flex-col w-1/2">
                 <label htmlFor="adults" className="mb-1 font-semibold text-gray-700">
-                  Adults
+                  Adults (₹600)
                 </label>
                 <input
                   id="adults"
@@ -305,7 +305,7 @@ export default function ExternalVisitor() {
 
               <div className="flex flex-col w-1/2">
                 <label htmlFor="children" className="mb-1 font-semibold text-gray-700">
-                  Children
+                  Children (₹300)
                 </label>
                 <input
                   id="children"

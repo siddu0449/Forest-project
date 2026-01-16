@@ -7,64 +7,66 @@ export default function Login() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("");
- 
-
-
-  // 🔐 Forgot password states
-  const [showForgot, setShowForgot] = useState(false);
-  const [securityAnswer, setSecurityAnswer] = useState("");
-  const [showManagerPassword, setShowManagerPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const navigate = useNavigate();
+  const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
-  const MANAGER_SECURITY_ANSWER = "forest123";
-  const MANAGER_PASSWORD = "manager@123";
-
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
+    setError("");
+    setLoading(true);
 
     if (!username || !password || !role) {
-      alert("Please fill all fields");
+      setError("Please fill all fields");
+      setLoading(false);
       return;
     }
 
-    const USERS = {
-      manager: { password: "manager@123", role: ROLES.MANAGER },
-      reception: { password: "reception@123", role: ROLES.RECEPTION },
-      gate: { password: "gate@123", role: ROLES.GATE },
-    };
+    try {
+      // Call backend API for authentication
+      const response = await fetch(`${API_BASE}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          role: role,
+          password: password,
+        }),
+      });
 
-    const user = USERS[username];
+      const data = await response.json();
 
-    if (!user || user.password !== password || user.role !== role) {
-      alert("Invalid credentials or role");
-      return;
-    }
+      if (!response.ok) {
+        setError(data.error || "Invalid credentials");
+        setLoading(false);
+        return;
+      }
 
-    localStorage.setItem("isLoggedIn", "true");
-    localStorage.setItem("userRole", role);
-    localStorage.setItem("username", username);
+      // Store login info
+      localStorage.setItem("isLoggedIn", "true");
+      localStorage.setItem("userRole", role);
+      localStorage.setItem("username", username);
 
-    switch (role) {
-      case ROLES.RECEPTION:
-        navigate("/reception");
-        break;
-      case ROLES.MANAGER:
-        navigate("/manager");
-        break;
-      case ROLES.GATE:
-        navigate("/gate");
-        break;
-      default:
-        navigate("/");
-    }
-  };
-
-  const handleSecurityCheck = () => {
-    if (securityAnswer === MANAGER_SECURITY_ANSWER) {
-      setShowManagerPassword(true);
-    } else {
-      alert("Wrong answer");
+      // Navigate based on role
+      switch (role) {
+        case ROLES.RECEPTION:
+          navigate("/reception");
+          break;
+        case ROLES.MANAGER:
+          navigate("/manager");
+          break;
+        case ROLES.GATE:
+          navigate("/gate");
+          break;
+        default:
+          navigate("/");
+      }
+    } catch (error) {
+      console.error("Login error:", error);
+      setError("Login failed. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -83,6 +85,13 @@ export default function Login() {
         <h2 className="text-xl font-bold mb-4 text-green-800 text-center">
           Forest Department Login
         </h2>
+
+        {/* Error Message */}
+        {error && (
+          <div className="mb-4 p-2 bg-red-100 border border-red-400 text-red-700 rounded text-sm text-center">
+            {error}
+          </div>
+        )}
 
         {/* Role */}
         <select
@@ -115,63 +124,12 @@ export default function Login() {
         />
 
         {/* Login */}
-        <button className="w-full bg-green-700 text-white py-2 rounded hover:bg-green-800">
-          Login
+        <button 
+          className="w-full bg-green-700 text-white py-2 rounded hover:bg-green-800 disabled:bg-gray-400 disabled:cursor-not-allowed"
+          disabled={loading}
+        >
+          {loading ? "Logging in..." : "Login"}
         </button>
-
-        {/* Forgot Password Toggle */}
-        <div className="text-center mt-3">
-          <button
-            type="button"
-            onClick={() => {
-              setShowForgot(!showForgot);
-              setShowManagerPassword(false);
-              setSecurityAnswer("");
-            }}
-            className="text-sm text-green-700 hover:underline"
-          >
-            Forgot Password?
-          </button>
-        </div>
-
-        {/* 🔐 Forgot Password Section */}
-        {showForgot && (
-          <div className="mt-4 border-t pt-4">
-            <p className="font-semibold text-sm mb-2 text-gray-700">
-              Manager Security Question
-            </p>
-
-            <p className="text-sm mb-2">
-              What is the forest secret code?
-            </p>
-
-            <input
-              type="text"
-              placeholder="Enter answer"
-              value={securityAnswer}
-              onChange={(e) => setSecurityAnswer(e.target.value)}
-              className="w-full border p-2 rounded mb-2"
-            />
-
-            <button
-              type="button"
-              onClick={handleSecurityCheck}
-              className="w-full bg-blue-600 text-white py-1 rounded"
-            >
-              Verify Answer
-            </button>
-
-            {/* ✅ Show Manager Password */}
-            {showManagerPassword && (
-              <div className="mt-3 bg-green-100 border border-green-400 p-2 rounded text-center">
-                <p className="text-sm font-semibold text-green-800">
-                  Manager Password
-                </p>
-                <p className="font-bold">{MANAGER_PASSWORD}</p>
-              </div>
-            )}
-          </div>
-        )}
       </form>
     </div>
   );

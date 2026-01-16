@@ -16,7 +16,10 @@ connectDB();
 // Middleware
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:5173",
+    origin: [
+      process.env.FRONTEND_URL || "http://localhost:5173",
+      "http://localhost:5174",
+    ],
     credentials: true,
   })
 );
@@ -40,8 +43,7 @@ app.use(
   "/api/vehicle-assignments",
   require("./routes/vehicleAssignmentRoutes")
 );
-// app.use('/api/auth', require('./routes/auth'));
-// app.use('/api/users', require('./routes/users'));
+app.use("/api/auth", require("./routes/authRoutes"));
 
 // Error handling middleware (should be last)
 app.use(errorHandler);
