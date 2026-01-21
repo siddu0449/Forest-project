@@ -55,4 +55,11 @@ router.put("/:bookingId/confirm-payment", bookingController.confirmPayment);
  */
 router.delete("/:id", bookingController.deleteBooking);
 
+/**
+ * @route   GET /api/bookings/report
+ * @desc    Get report data for a date range
+ * @access  Private (Manager)
+ */
+router.get("/report", bookingController.getReport);
+
 module.exports = router;

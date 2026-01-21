@@ -89,10 +89,10 @@ export default function ManagerDashboard() {
 
     const pending = totalVisitors - paid;
 
-    const totalSeats = dateVisitors.reduce((sum, v) => {
-      const seats = parseInt(v.totalSeats, 10);
-      return sum + (isNaN(seats) ? 0 : seats);
-    }, 0);
+    const totalSeats = dateVisitors
+  .filter(v => v.paymentDone)
+  .reduce((sum, v) => sum + (parseInt(v.totalSeats) || 0), 0);
+
 
     const totalAdults = dateVisitors.reduce((sum, v) => {
       return sum + (parseInt(v.adults) || 0);
@@ -114,16 +114,22 @@ export default function ManagerDashboard() {
     const pendingAmount = totalAmount - paidAmount;
 
     // Group by time slot
-    const slotData = dateVisitors.reduce((acc, v) => {
-      const slot = v.timeSlot || 'Unknown';
-      if (!acc[slot]) {
-        acc[slot] = { count: 0, seats: 0, amount: 0 };
-      }
-      acc[slot].count++;
-      acc[slot].seats += parseInt(v.totalSeats) || 0;
-      acc[slot].amount += parseFloat(v.paymentAmount) || 0;
-      return acc;
-    }, {});
+const slotData = dateVisitors
+  .filter(v => v.paymentDone)
+  .reduce((acc, v) => {
+    const slot = v.timeSlot || "Unknown";
+
+    if (!acc[slot]) {
+      acc[slot] = { count: 0, seats: 0, amount: 0 };
+    }
+
+    acc[slot].count += 1;
+    acc[slot].seats += parseInt(v.totalSeats) || 0;
+    acc[slot].amount += parseFloat(v.paymentAmount) || 0;
+
+    return acc;
+  }, {});
+
 
     return { 
       totalVisitors, 
@@ -181,15 +187,16 @@ export default function ManagerDashboard() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
-        <SummaryCard title="Visitors" value={summary.totalVisitors} />
+        <SummaryCard title="Visitors Token" value={summary.totalVisitors} />
         <SummaryCard title="Paid" value={summary.paid} color="green" />
         <SummaryCard title="Pending" value={summary.pending} color="red" />
         <SummaryCard title="Total Seats" value={summary.totalSeats} />
         <SummaryCard
-          title="Total Collection"
-          value={`₹${summary.totalAmount.toLocaleString()}`}
-          color="blue"
-        />
+  title="Total Collection"
+  value={`₹${summary.paidAmount.toLocaleString()}`}
+  color="blue"
+/>
+
       </div>
 
       {/* Time Slot Breakdown */}

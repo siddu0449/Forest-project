@@ -18,6 +18,14 @@ export default function ManagerTabs() {
         Manage Vehicle & Driver
       </NavLink>
 
+      <NavLink to="/manager/timeslots" className={tabClass}>
+        Time Slot Settings
+      </NavLink>
+
+      <NavLink to="/manager/reports" className={tabClass}>
+        Reports & Analytics
+      </NavLink>
+
       <NavLink to="/manager/password" className={tabClass}>
         Password Management
       </NavLink>

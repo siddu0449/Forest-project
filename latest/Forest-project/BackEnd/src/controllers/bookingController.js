@@ -1,4 +1,4 @@
-const { VisitorBooking, IndividualToken } = require("../models");
+const { VisitorBooking, IndividualToken, UnpaidBooking } = require("../models");
 const { Op } = require("sequelize");
 
 // Time slots configuration (10 AM to 6 PM)
@@ -283,7 +283,7 @@ exports.assignIndividualTokens = async (req, res) => {
 exports.confirmPayment = async (req, res) => {
   try {
     const { bookingId } = req.params;
-    const { paymentMode } = req.body;
+    const { paymentMode, utrNumber } = req.body;
 
     const booking = await VisitorBooking.findByPk(bookingId);
 
@@ -303,6 +303,7 @@ exports.confirmPayment = async (req, res) => {
 
     booking.paymentDone = true;
     booking.paymentMode = paymentMode || "cash";
+    booking.utrNumber = utrNumber || null;
     booking.safariStatus = "confirmed";
     await booking.save();
 
@@ -376,6 +377,25 @@ exports.deleteBooking = async (req, res) => {
       });
     }
 
+    // Save to unpaid_bookings before deleting (if payment not done)
+    if (!booking.paymentDone) {
+      await UnpaidBooking.create({
+        originalBookingId: booking.id,
+        token: booking.token,
+        name: booking.name,
+        phone: booking.phone,
+        email: booking.email,
+        safariDate: booking.safariDate,
+        timeSlot: booking.timeSlot,
+        adults: booking.adults,
+        children: booking.children,
+        totalSeats: booking.totalSeats,
+        totalAmount: booking.totalAmount,
+        deletedAt: new Date(),
+        reason: "Payment timeout - 15 minutes expired",
+      });
+    }
+
     // Delete the booking (IndividualTokens will be deleted automatically due to CASCADE)
     await booking.destroy();
 
@@ -388,6 +408,93 @@ exports.deleteBooking = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to delete booking",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Get report data for a date range
+ */
+exports.getReport = async (req, res) => {
+  try {
+    const { fromDate, toDate } = req.query;
+
+    // Validate required parameters
+    if (!fromDate || !toDate) {
+      return res.status(400).json({
+        success: false,
+        message: "Both fromDate and toDate are required",
+      });
+    }
+
+    // Fetch all bookings within the date range
+    const bookings = await VisitorBooking.findAll({
+      where: {
+        safariDate: {
+          [Op.between]: [fromDate, toDate],
+        },
+      },
+    });
+
+    // Fetch unpaid/deleted bookings within the date range
+    const unpaidBookings = await UnpaidBooking.findAll({
+      where: {
+        safariDate: {
+          [Op.between]: [fromDate, toDate],
+        },
+      },
+      order: [["deletedAt", "DESC"]],
+    });
+
+    // Calculate statistics
+    const totalVisitors = bookings.length;
+    const totalSeats = bookings.reduce(
+      (sum, booking) => sum + (booking.totalSeats || 0),
+      0
+    );
+    const totalPayments = bookings.reduce(
+      (sum, booking) => sum + (booking.totalAmount || 0),
+      0
+    );
+    const paymentsCompleted = bookings.filter(
+      (b) => b.paymentDone === true
+    ).length;
+    const paymentsPending = totalVisitors - paymentsCompleted;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        totalVisitors,
+        totalSeats,
+        totalPayments,
+        paymentsCompleted,
+        paymentsPending,
+        unpaidBookings: unpaidBookings.map((ub) => ({
+          token: ub.token,
+          name: ub.name,
+          phone: ub.phone,
+          email: ub.email,
+          safariDate: ub.safariDate,
+          timeSlot: ub.timeSlot,
+          adults: ub.adults,
+          children: ub.children,
+          totalSeats: ub.totalSeats,
+          totalAmount: ub.totalAmount,
+          deletedAt: ub.deletedAt,
+          reason: ub.reason,
+        })),
+        dateRange: {
+          from: fromDate,
+          to: toDate,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Get report error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch report data",
       error: error.message,
     });
   }

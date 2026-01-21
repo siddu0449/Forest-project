@@ -25,7 +25,7 @@ const connectDB = async () => {
     console.log("✅ Database connection established successfully.");
 
     // Sync models with database
-    await sequelize.sync({ force: false }); // Set force to true to drop and recreate tables (use with caution)
+    await sequelize.sync({ force: false });
     console.log("✅ All models synchronized.");
 
     // Initialize default credentials and security question
