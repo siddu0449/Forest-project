@@ -105,6 +105,7 @@ export default function ReceptionDashboard() {
             paymentAmount: booking.paymentAmount,
             paymentDone: booking.paymentDone,
             paymentMode: booking.paymentMode || "",
+            utrNumber: booking.utrNumber || "",
             expired: booking.expired,
             timeLeft: timeLeft,
             vehicle: booking.vehicle,
@@ -374,7 +375,8 @@ export default function ReceptionDashboard() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          paymentMode: visitor.paymentMode
+          paymentMode: visitor.paymentMode,
+          utrNumber: visitor.utrNumber || null
         })
       });
 
@@ -402,6 +404,14 @@ export default function ReceptionDashboard() {
   const setPaymentMode = (id, mode) => {
     const updated = visitors.map(v =>
       v.id === id ? { ...v, paymentMode: mode } : v
+    );
+    setVisitors(updated);
+    localStorage.setItem("visitorList", JSON.stringify(updated));
+  };
+
+  const setUtrNumber = (id, utrNumber) => {
+    const updated = visitors.map(v =>
+      v.id === id ? { ...v, utrNumber } : v
     );
     setVisitors(updated);
     localStorage.setItem("visitorList", JSON.stringify(updated));
@@ -566,6 +576,7 @@ export default function ReceptionDashboard() {
                     <th className="p-2 border">Children</th>
                     <th className="p-2 border">Total Seats</th>
                     <th className="p-2 border">Payment Mode</th>
+                    <th className="p-2 border">UTR Number</th>
                     <th className="p-2 border">Amount (₹)</th>
                     <th className="p-2 border">Timer</th>
                     <th className="p-2 border">Payment Status</th>
@@ -598,6 +609,19 @@ export default function ReceptionDashboard() {
                             <option value="UPI">UPI</option>
                             <option value="Card">Card</option>
                           </select>
+                        )}
+                      </td>
+                      <td className="p-2 border">
+                        {v.paymentDone ? (
+                          <span className="text-gray-700 text-sm">{v.utrNumber || "-"}</span>
+                        ) : (
+                          <input
+                            type="text"
+                            value={v.utrNumber || ""}
+                            onChange={e => setUtrNumber(v.id, e.target.value)}
+                            placeholder="UTR/Ref No. (optional)"
+                            className="border p-1 rounded w-full text-sm"
+                          />
                         )}
                       </td>
                       <td className="p-2 border font-semibold">₹{v.paymentAmount}</td>

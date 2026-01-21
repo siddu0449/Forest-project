@@ -19,6 +19,7 @@ app.use(
     origin: [
       process.env.FRONTEND_URL || "http://localhost:5173",
       "http://localhost:5174",
+      "http://localhost:5175",
     ],
     credentials: true,
   })
@@ -44,6 +45,7 @@ app.use(
   require("./routes/vehicleAssignmentRoutes")
 );
 app.use("/api/auth", require("./routes/authRoutes"));
+app.use("/api/time-slots", require("./routes/timeSlotRoutes"));
 
 // Error handling middleware (should be last)
 app.use(errorHandler);
