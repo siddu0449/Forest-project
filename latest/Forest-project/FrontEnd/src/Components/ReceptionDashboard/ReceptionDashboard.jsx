@@ -1009,26 +1009,33 @@ export default function ReceptionDashboard() {
                             )}
                           </div>
                           
-                          <table className="w-full border mt-2 text-sm">
-                            <thead>
-                              <tr className="bg-gray-200">
-                                <th className="border p-2">Sub Token</th>
-                                <th className="border p-2">Name</th>
-                                <th className="border p-2">Phone</th>
-                                <th className="border p-2">Email</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {passengers.map(p => (
-                                <tr key={p.subToken}>
-                                  <td className="border p-2 text-center font-mono font-bold">{p.subToken}</td>
-                                  <td className="border p-2">{p.name}</td>
-                                  <td className="border p-2">{p.phone}</td>
-                                  <td className="border p-2 text-sm">{p.email}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                          <div className="overflow-x-auto w-full">
+  <table className="min-w-[650px] border mt-2 text-sm">
+    <thead>
+      <tr className="bg-gray-200">
+        <th className="border p-2 whitespace-nowrap">Sub Token</th>
+        <th className="border p-2 whitespace-nowrap">Name</th>
+        <th className="border p-2 whitespace-nowrap">Phone</th>
+        <th className="border p-2 whitespace-nowrap">Email</th>
+      </tr>
+    </thead>
+    <tbody>
+      {passengers.map(p => (
+        <tr key={p.subToken}>
+          <td className="border p-2 text-center font-mono font-bold whitespace-nowrap">
+            {p.subToken}
+          </td>
+          <td className="border p-2 whitespace-nowrap">{p.name}</td>
+          <td className="border p-2 whitespace-nowrap">{p.phone}</td>
+          <td className="border p-2 text-sm whitespace-nowrap">
+            {p.email}
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</div>
+
                         </div>
                       ))}
 

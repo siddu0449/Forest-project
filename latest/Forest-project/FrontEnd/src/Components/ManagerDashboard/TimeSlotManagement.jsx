@@ -6,6 +6,7 @@ const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 export default function TimeSlotManagement() {
   const [timeSlots, setTimeSlots] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [updatingId, setUpdatingId] = useState(null);
 
   useEffect(() => {
     fetchTimeSlots();
@@ -24,43 +25,55 @@ export default function TimeSlotManagement() {
     }
   };
 
-  // ✅ RESET DEFAULT SLOTS
+  // 🔄 Reset defaults
   const resetDefaultSlots = async () => {
-    if (!confirm("This will reset/update all 4 default time slots. Continue?")) return;
+    if (!confirm("This will reset/update all 4 default time slots. Continue?"))
+      return;
 
     try {
       const res = await fetch(`${API_URL}/time-slots/reset-defaults`, {
         method: "POST",
       });
-
       const data = await res.json();
-      if (data.success) {
-        fetchTimeSlots();
-      } else {
-        alert(data.message || "Failed to reset slots");
-      }
+      if (data.success) fetchTimeSlots();
+      else alert(data.message || "Failed to reset slots");
     } catch (err) {
       console.error(err);
       alert("Failed to reset default slots");
     }
   };
 
-  const updateSlot = async (id, updates) => {
+  // ✅ UPDATE SLOT (manual button)
+  const updateSlot = async (slot) => {
+    setUpdatingId(slot.id);
     try {
-      await fetch(`${API_URL}/time-slots/${id}`, {
+      const res = await fetch(`${API_URL}/time-slots/${slot.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updates),
+        body: JSON.stringify({
+          timeSlot: slot.timeSlot,
+          slotLimit: Number(slot.slotLimit),
+          active: slot.active,
+        }),
       });
+
+      const data = await res.json();
+      if (!data.success) {
+        alert("Update failed");
+      }
     } catch (err) {
       console.error(err);
+      alert("Failed to update slot");
+    } finally {
+      setUpdatingId(null);
     }
   };
 
-  const toggleActive = (id, active) => {
-    updateSlot(id, { active: !active });
+  const toggleActiveLocal = (id) => {
     setTimeSlots((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, active: !active } : s))
+      prev.map((s) =>
+        s.id === id ? { ...s, active: !s.active } : s
+      )
     );
   };
 
@@ -83,12 +96,13 @@ export default function TimeSlotManagement() {
         {loading ? (
           <p className="text-center text-gray-500">Loading...</p>
         ) : (
-          <table className="w-full min-w-[600px] text-sm">
+          <table className="w-full min-w-[700px] text-sm">
             <thead className="bg-gray-100">
               <tr>
                 <th className="p-3 text-left">Time Slot</th>
                 <th className="p-3 text-left">Seat Limit</th>
                 <th className="p-3 text-left">Status</th>
+                <th className="p-3 text-left">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -102,9 +116,6 @@ export default function TimeSlotManagement() {
                         copy[index].timeSlot = e.target.value;
                         setTimeSlots(copy);
                       }}
-                      onBlur={() =>
-                        updateSlot(slot.id, { timeSlot: slot.timeSlot })
-                      }
                       className="w-full border px-2 py-1 rounded"
                     />
                   </td>
@@ -119,18 +130,13 @@ export default function TimeSlotManagement() {
                         copy[index].slotLimit = e.target.value;
                         setTimeSlots(copy);
                       }}
-                      onBlur={() =>
-                        updateSlot(slot.id, {
-                          slotLimit: parseInt(slot.slotLimit),
-                        })
-                      }
                       className="w-24 border px-2 py-1 rounded"
                     />
                   </td>
 
                   <td className="p-3">
                     <button
-                      onClick={() => toggleActive(slot.id, slot.active)}
+                      onClick={() => toggleActiveLocal(slot.id)}
                       className={`px-3 py-1 rounded-full text-xs font-semibold ${
                         slot.active
                           ? "bg-green-100 text-green-700"
@@ -138,6 +144,16 @@ export default function TimeSlotManagement() {
                       }`}
                     >
                       {slot.active ? "Active" : "Inactive"}
+                    </button>
+                  </td>
+
+                  <td className="p-3">
+                    <button
+                      onClick={() => updateSlot(slot)}
+                      disabled={updatingId === slot.id}
+                      className="px-4 py-1 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                    >
+                      {updatingId === slot.id ? "Updating..." : "Update"}
                     </button>
                   </td>
                 </tr>
@@ -148,9 +164,8 @@ export default function TimeSlotManagement() {
       </div>
 
       <div className="mt-4 text-sm text-blue-700 bg-blue-50 border border-blue-200 p-3 rounded">
-        <strong>Note:</strong> This screen manages only the 4 default safari time
-        slots. You can update time, seat availability, or activate/deactivate
-        them. Clicking “Reset” will recreate defaults if missing.
+        <strong>Note:</strong> Changes will be visible to external visitors
+        <b> only after clicking Update</b> for a slot.
       </div>
     </div>
   );
