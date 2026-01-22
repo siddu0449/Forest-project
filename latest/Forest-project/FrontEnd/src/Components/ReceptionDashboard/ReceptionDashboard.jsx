@@ -543,6 +543,48 @@ export default function ReceptionDashboard() {
             </button>
           </div>
 
+          {/* Summary Statistics Cards for Paid Visitors */}
+          {!loading && filteredVisitors.length > 0 && (() => {
+            const paidVisitors = filteredVisitors.filter(v => v.paymentDone);
+            const totalPaidTokens = paidVisitors.length;
+            const totalPaidSeats = paidVisitors.reduce((sum, v) => sum + (v.totalSeats || 0), 0);
+            const totalCollection = paidVisitors.reduce((sum, v) => sum + (parseFloat(v.paymentAmount) || 0), 0);
+
+            return (
+              <div className="flex gap-4 mb-6 flex-wrap">
+                <div className="flex-1 min-w-[250px] bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 text-white">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm opacity-90">Total Paid Tokens</p>
+                      <p className="text-3xl font-bold mt-1">{totalPaidTokens}</p>
+                    </div>
+                    <div className="text-4xl opacity-80">🎫</div>
+                  </div>
+                </div>
+
+                <div className="flex-1 min-w-[250px] bg-gradient-to-br from-green-500 to-green-600 rounded-lg shadow-lg p-6 text-white">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm opacity-90">Total Seats (Paid)</p>
+                      <p className="text-3xl font-bold mt-1">{totalPaidSeats}</p>
+                    </div>
+                    <div className="text-4xl opacity-80">💺</div>
+                  </div>
+                </div>
+
+                <div className="flex-1 min-w-[250px] bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg shadow-lg p-6 text-white">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm opacity-90">Total Collection</p>
+                      <p className="text-3xl font-bold mt-1">₹{totalCollection.toLocaleString()}</p>
+                    </div>
+                    <div className="text-4xl opacity-80">💰</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           {loading && (
             <div className="text-center py-4 text-blue-600">
               Loading bookings...

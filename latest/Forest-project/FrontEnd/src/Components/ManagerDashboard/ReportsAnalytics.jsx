@@ -10,6 +10,7 @@ export default function ReportsAnalytics() {
   const [reportData, setReportData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [paymentFilter, setPaymentFilter] = useState("all"); // "all", "paid", "unpaid"
 
   const fetchReport = async () => {
     if (!fromDate || !toDate) {
@@ -33,7 +34,6 @@ export default function ReportsAnalytics() {
       
       if (data.success) {
         console.log('📊 Report Data:', data.data);
-        console.log('🚫 Unpaid Bookings:', data.data.unpaidBookings);
         setReportData(data.data);
       } else {
         setError(data.message || 'Failed to fetch report');
@@ -60,8 +60,12 @@ export default function ReportsAnalytics() {
       [""],
       ["Summary Statistics"],
       ["Total Visitors", reportData.totalVisitors],
+      ["Paid Bookings", reportData.paymentsCompleted],
+      ["Pending Bookings", reportData.paymentsPending],
       ["Total Seats Booked", reportData.totalSeats],
-      ["Total Payments (₹)", reportData.totalPayments],
+      ["Total Adults", reportData.totalAdults || 0],
+      ["Total Children", reportData.totalChildren || 0],
+      ["Total Collection (₹)", reportData.totalPayments],
       [""],
       ["Payment Breakdown"],
       ["Payments Completed", reportData.paymentsCompleted],
@@ -72,6 +76,41 @@ export default function ReportsAnalytics() {
     const ws = XLSX.utils.aoa_to_sheet(summaryData);
     ws['!cols'] = [{ wch: 25 }, { wch: 20 }];
     XLSX.utils.book_append_sheet(wb, ws, "Report Summary");
+
+    // Detailed bookings worksheet
+    if (reportData.bookings && reportData.bookings.length > 0) {
+      const bookingsData = [
+        ["Detailed Visitor Bookings"],
+        [""],
+        ["Token", "Name", "Phone", "Email", "Safari Date", "Time Slot", "Adults", "Children", "Total Seats", "Payment Status", "Payment Mode", "UTR Number", "Amount (₹)"]
+      ];
+
+      reportData.bookings.forEach(booking => {
+        bookingsData.push([
+          booking.token,
+          booking.name,
+          booking.phone,
+          booking.email,
+          new Date(booking.safariDate).toLocaleDateString(),
+          booking.timeSlot,
+          booking.adults,
+          booking.children,
+          booking.totalSeats,
+          booking.paymentDone ? "Paid" : "Pending",
+          booking.paymentMode || "-",
+          booking.utrNumber || "-",
+          booking.paymentAmount || 0
+        ]);
+      });
+
+      const wsBookings = XLSX.utils.aoa_to_sheet(bookingsData);
+      wsBookings['!cols'] = [
+        { wch: 10 }, { wch: 20 }, { wch: 12 }, { wch: 25 }, { wch: 12 },
+        { wch: 15 }, { wch: 8 }, { wch: 10 }, { wch: 12 }, { wch: 15 },
+        { wch: 15 }, { wch: 20 }, { wch: 12 }
+      ];
+      XLSX.utils.book_append_sheet(wb, wsBookings, "All Bookings");
+    }
 
     // Unpaid bookings worksheet
     if (reportData.unpaidBookings && reportData.unpaidBookings.length > 0) {
@@ -178,51 +217,203 @@ export default function ReportsAnalytics() {
           </div>
 
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 text-white">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm opacity-90">Total Visitors</p>
-                  <p className="text-3xl font-bold mt-1">{reportData.totalVisitors}</p>
-                </div>
-                <div className="text-4xl opacity-80">👥</div>
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-lg shadow-lg p-6 text-white">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm opacity-90">Total Seats Booked</p>
-                  <p className="text-3xl font-bold mt-1">{reportData.totalSeats}</p>
-                </div>
-                <div className="text-4xl opacity-80">💺</div>
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg shadow-lg p-6 text-white">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm opacity-90">Total Payments</p>
-                  <p className="text-3xl font-bold mt-1">₹{reportData.totalPayments.toLocaleString()}</p>
-                </div>
-                <div className="text-4xl opacity-80">💰</div>
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-lg shadow-lg p-6 text-white">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm opacity-90">Unpaid (Deleted)</p>
-                  <p className="text-3xl font-bold mt-1">{reportData.unpaidBookings?.length || 0}</p>
-                </div>
-                <div className="text-4xl opacity-80">🚫</div>
-              </div>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+            <SummaryCard title="Visitors Token" value={reportData.totalVisitors} />
+            <SummaryCard title="Paid" value={reportData.paymentsCompleted} color="green" />
+            <SummaryCard title="Unpaid (Deleted)" value={reportData.unpaidBookings?.length || 0} color="red" />
+            <SummaryCard title="Total Seats" value={reportData.totalSeats} />
+            <SummaryCard
+              title="Total Collection"
+              value={`₹${reportData.totalPayments.toLocaleString()}`}
+              color="blue"
+            />
           </div>
 
-          {/* Additional Details */}
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h3 className="text-lg font-semibold text-gray-700 mb-4">Payment Breakdown</h3>
+          {/* Time Slot Breakdown */}
+          {reportData.slotData && Object.keys(reportData.slotData).length > 0 && (
+            <div className="mb-6 bg-white rounded shadow p-4">
+              <h3 className="text-lg font-bold mb-3 text-gray-800">Time Slot Breakdown</h3>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                {Object.entries(reportData.slotData).map(([slot, data]) => (
+                  <div key={slot} className="border rounded p-3">
+                    <p className="font-semibold text-blue-700">{slot}</p>
+                    <p className="text-sm text-gray-600">Bookings: <span className="font-bold">{data.count}</span></p>
+                    <p className="text-sm text-gray-600">Seats: <span className="font-bold">{data.seats}</span></p>
+                    <p className="text-sm text-gray-600">Revenue: <span className="font-bold">₹{data.amount.toLocaleString()}</span></p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Detailed Bookings Table */}
+          {(reportData.bookings?.length > 0 || reportData.unpaidBookings?.length > 0) && (
+            <div className="mb-6 bg-white rounded shadow">
+              <div className="p-4 border-b">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-bold text-gray-800">Detailed Bookings</h3>
+                  
+                  {/* Filter Buttons */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setPaymentFilter("all")}
+                      className={`px-4 py-2 rounded font-semibold transition ${
+                        paymentFilter === "all"
+                          ? "bg-blue-600 text-white"
+                          : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                      }`}
+                    >
+                      All Records
+                    </button>
+                    <button
+                      onClick={() => setPaymentFilter("paid")}
+                      className={`px-4 py-2 rounded font-semibold transition ${
+                        paymentFilter === "paid"
+                          ? "bg-green-600 text-white"
+                          : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                      }`}
+                    >
+                      Paid Only
+                    </button>
+                    <button
+                      onClick={() => setPaymentFilter("unpaid")}
+                      className={`px-4 py-2 rounded font-semibold transition ${
+                        paymentFilter === "unpaid"
+                          ? "bg-red-600 text-white"
+                          : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                      }`}
+                    >
+                      Unpaid (Deleted)
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="min-w-full border">
+                  <thead className="bg-gray-200">
+                    <tr>
+                      <th className="p-2 border">Token</th>
+                      <th className="p-2 border">Name</th>
+                      <th className="p-2 border">Phone</th>
+                      <th className="p-2 border">Safari Date</th>
+                      <th className="p-2 border">Time Slot</th>
+                      <th className="p-2 border">Seats</th>
+                      <th className="p-2 border">Status</th>
+                      <th className="p-2 border">Mode</th>
+                      <th className="p-2 border">UTR</th>
+                      <th className="p-2 border">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paymentFilter === "paid" && reportData.bookings
+                      ?.filter((booking) => booking.paymentDone === true)
+                      .map((booking) => (
+                        <tr key={booking.id} className="text-center hover:bg-gray-50">
+                          <td className="p-2 border font-bold text-blue-700">
+                            {booking.token}
+                          </td>
+                          <td className="p-2 border">{booking.name}</td>
+                          <td className="p-2 border">{booking.phone}</td>
+                          <td className="p-2 border">{new Date(booking.safariDate).toLocaleDateString()}</td>
+                          <td className="p-2 border">{booking.timeSlot}</td>
+                          <td className="p-2 border">{booking.totalSeats || 0}</td>
+                          <td className="p-2 border">
+                            <span className="text-green-700 font-semibold">Paid</span>
+                          </td>
+                          <td className="p-2 border">{booking.paymentMode || "-"}</td>
+                          <td className="p-2 border text-xs">{booking.utrNumber || "-"}</td>
+                          <td className="p-2 border">
+                            {booking.paymentAmount
+                              ? `₹${parseFloat(booking.paymentAmount).toLocaleString()}`
+                              : "-"}
+                          </td>
+                        </tr>
+                      ))}
+                    
+                    {paymentFilter === "unpaid" && reportData.unpaidBookings
+                      ?.map((booking, index) => (
+                        <tr key={`unpaid-${index}`} className="text-center hover:bg-red-50">
+                          <td className="p-2 border font-bold text-blue-700">
+                            {booking.token}
+                          </td>
+                          <td className="p-2 border">{booking.name}</td>
+                          <td className="p-2 border">{booking.phone}</td>
+                          <td className="p-2 border">{new Date(booking.safariDate).toLocaleDateString()}</td>
+                          <td className="p-2 border">{booking.timeSlot}</td>
+                          <td className="p-2 border">{booking.totalSeats || 0}</td>
+                          <td className="p-2 border">
+                            <span className="text-red-700 font-semibold">Unpaid (Deleted)</span>
+                          </td>
+                          <td className="p-2 border">-</td>
+                          <td className="p-2 border text-xs">-</td>
+                          <td className="p-2 border">
+                            {booking.totalAmount
+                              ? `₹${parseFloat(booking.totalAmount).toLocaleString()}`
+                              : "-"}
+                          </td>
+                        </tr>
+                      ))}
+                    
+                    {paymentFilter === "all" && (
+                      <>
+                        {reportData.bookings
+                          ?.filter((booking) => booking.paymentDone === true)
+                          .map((booking) => (
+                            <tr key={booking.id} className="text-center hover:bg-gray-50">
+                              <td className="p-2 border font-bold text-blue-700">
+                                {booking.token}
+                              </td>
+                              <td className="p-2 border">{booking.name}</td>
+                              <td className="p-2 border">{booking.phone}</td>
+                              <td className="p-2 border">{new Date(booking.safariDate).toLocaleDateString()}</td>
+                              <td className="p-2 border">{booking.timeSlot}</td>
+                              <td className="p-2 border">{booking.totalSeats || 0}</td>
+                              <td className="p-2 border">
+                                <span className="text-green-700 font-semibold">Paid</span>
+                              </td>
+                              <td className="p-2 border">{booking.paymentMode || "-"}</td>
+                              <td className="p-2 border text-xs">{booking.utrNumber || "-"}</td>
+                              <td className="p-2 border">
+                                {booking.paymentAmount
+                                  ? `₹${parseFloat(booking.paymentAmount).toLocaleString()}`
+                                  : "-"}
+                              </td>
+                            </tr>
+                          ))}
+                        {reportData.unpaidBookings
+                          ?.map((booking, index) => (
+                            <tr key={`unpaid-${index}`} className="text-center hover:bg-red-50">
+                              <td className="p-2 border font-bold text-blue-700">
+                                {booking.token}
+                              </td>
+                              <td className="p-2 border">{booking.name}</td>
+                              <td className="p-2 border">{booking.phone}</td>
+                              <td className="p-2 border">{new Date(booking.safariDate).toLocaleDateString()}</td>
+                              <td className="p-2 border">{booking.timeSlot}</td>
+                              <td className="p-2 border">{booking.totalSeats || 0}</td>
+                              <td className="p-2 border">
+                                <span className="text-red-700 font-semibold">Unpaid (Deleted)</span>
+                              </td>
+                              <td className="p-2 border">-</td>
+                              <td className="p-2 border text-xs">-</td>
+                              <td className="p-2 border">
+                                {booking.totalAmount
+                                  ? `₹${parseFloat(booking.totalAmount).toLocaleString()}`
+                                  : "-"}
+                              </td>
+                            </tr>
+                          ))}
+                      </>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Additional Details - Payment Status */}
+          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h3 className="text-lg font-semibold text-gray-700 mb-4">Payment Status</h3>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="border border-gray-200 rounded-lg p-4">
@@ -231,8 +422,8 @@ export default function ReportsAnalytics() {
               </div>
 
               <div className="border border-gray-200 rounded-lg p-4">
-                <p className="text-sm text-gray-600">Payments Pending</p>
-                <p className="text-2xl font-bold text-orange-600 mt-1">{reportData.paymentsPending}</p>
+                <p className="text-sm text-gray-600">Unpaid Bookings (Deleted)</p>
+                <p className="text-2xl font-bold text-red-600 mt-1">{reportData.unpaidBookings?.length || 0}</p>
               </div>
             </div>
           </div>
@@ -317,6 +508,23 @@ export default function ReportsAnalytics() {
           <p className="text-gray-600">Select a date range and click "Generate Report" to view analytics</p>
         </div>
       )}
+    </div>
+  );
+}
+
+/* Summary Card Component */
+function SummaryCard({ title, value, color = "gray" }) {
+  const colors = {
+    gray: "bg-gray-200 text-gray-800",
+    green: "bg-green-200 text-green-800",
+    red: "bg-red-200 text-red-800",
+    blue: "bg-blue-200 text-blue-800",
+  };
+
+  return (
+    <div className={`p-4 rounded shadow ${colors[color]}`}>
+      <p className="text-sm">{title}</p>
+      <p className="text-xl font-bold">{value}</p>
     </div>
   );
 }
