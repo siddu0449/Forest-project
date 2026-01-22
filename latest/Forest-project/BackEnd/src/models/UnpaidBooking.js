@@ -12,6 +12,7 @@ const UnpaidBooking = sequelize.define(
     originalBookingId: {
       type: DataTypes.INTEGER,
       allowNull: false,
+       unique: true, 
     },
     token: {
       type: DataTypes.STRING,
@@ -53,11 +54,11 @@ const UnpaidBooking = sequelize.define(
       type: DataTypes.DECIMAL(10, 2),
       allowNull: false,
     },
-    deletedAt: {
-      type: DataTypes.DATE,
-      allowNull: false,
-      defaultValue: DataTypes.NOW,
-    },
+   deletedAt: {
+  type: DataTypes.DATE,
+  allowNull: true,
+},
+
     reason: {
       type: DataTypes.STRING,
       defaultValue: "Payment timeout - 15 minutes expired",

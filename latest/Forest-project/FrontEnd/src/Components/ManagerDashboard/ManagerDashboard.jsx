@@ -57,6 +57,7 @@ export default function ManagerDashboard() {
   const dateVisitors = useMemo(() => {
     const filtered = visitors.filter((v) => v.safariDate === selectedDate);
     
+    filtered.sort((a, b) => Number(a.token) - Number(b.token));
     // Merge vehicle assignment data into visitors
     return filtered.map(visitor => {
       // Find vehicle assignments that include this visitor's token
@@ -228,6 +229,7 @@ const slotData = dateVisitors
               <th className="p-2 border">Seats</th>
               <th className="p-2 border">Payment</th>
               <th className="p-2 border">Mode</th>
+              <th className="p-2 border">UTR</th>
               <th className="p-2 border">Amount</th>
               <th className="p-2 border">Vehicle</th>
               <th className="p-2 border">Driver</th>
@@ -240,7 +242,8 @@ const slotData = dateVisitors
               const driver = v.driverName || "-";
 
               return (
-                <tr key={v.id} className="text-center">
+                <tr key={`${v.token}-${v.id}`} className="text-center">
+
                   <td className="p-2 border font-bold text-blue-700">
                     {v.token}
                   </td>
@@ -262,6 +265,9 @@ const slotData = dateVisitors
                   <td className="p-2 border">
                     {v.paymentMode || "-"}
                   </td>
+                  <td className="p-2 border text-xs">
+                    {v.utrNumber || "-"}
+                  </td>
                   <td className="p-2 border">
                     {v.paymentAmount
                       ? `₹${parseFloat(v.paymentAmount).toLocaleString()}`
@@ -276,7 +282,7 @@ const slotData = dateVisitors
             {dateVisitors.length === 0 && !loading && (
               <tr>
                 <td
-                  colSpan="10"
+                  colSpan="11"
                   className="p-4 text-center text-gray-500"
                 >
                   No data for selected date
