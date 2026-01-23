@@ -33,6 +33,10 @@ const VehicleAssignment = sequelize.define(
       type: DataTypes.DATEONLY,
       allowNull: false,
     },
+    runNumber: {
+  type: DataTypes.INTEGER,
+  allowNull: false,
+},
     capacity: {
       type: DataTypes.INTEGER,
       defaultValue: 10,

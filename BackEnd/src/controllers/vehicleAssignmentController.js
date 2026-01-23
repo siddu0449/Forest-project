@@ -1,4 +1,4 @@
-const { VehicleAssignment } = require("../models");
+const { VehicleAssignment, VisitorBooking } = require("../models");
 
 // Get all vehicle assignments for a specific date
 exports.getVehicleAssignments = async (req, res) => {
@@ -40,6 +40,7 @@ exports.saveVehicleAssignment = async (req, res) => {
       vehicleOwner,
       driverName,
       safariDate,
+      runNumber,
       capacity,
       seatsFilled,
       passengers,
@@ -92,6 +93,7 @@ exports.saveVehicleAssignment = async (req, res) => {
         vehicleOwner,
         driverName,
         safariDate,
+        runNumber: runNumber ?? 1,
         capacity: capacity || 10,
         seatsFilled: seatsFilled || 0,
         passengers: passengers || [],
@@ -134,6 +136,57 @@ exports.updateVehicleAssignment = async (req, res) => {
     }
 
     await assignment.update(updates);
+
+    // If safari completed for this assignment, check and update related bookings
+    if (updates.safariStatus === "completed") {
+      try {
+        // Fetch all completed assignments for the same date
+        const completedAssignments = await VehicleAssignment.findAll({
+          where: {
+            safariDate: assignment.safariDate,
+            safariStatus: "completed",
+          },
+        });
+
+        // Build token -> completed passenger count map
+        const tokenCompletedCounts = new Map();
+        for (const a of completedAssignments) {
+          const passengers = Array.isArray(a.passengers) ? a.passengers : [];
+          for (const p of passengers) {
+            if (!p?.token) continue;
+            tokenCompletedCounts.set(
+              p.token,
+              (tokenCompletedCounts.get(p.token) || 0) + 1,
+            );
+          }
+        }
+
+        // For each token present in this assignment, set booking to completed when fully done
+        const thisTokens = Array.from(
+          new Set(
+            (Array.isArray(assignment.passengers) ? assignment.passengers : [])
+              .map((p) => p.token)
+              .filter(Boolean),
+          ),
+        );
+
+        for (const tkn of thisTokens) {
+          const booking = await VisitorBooking.findOne({
+            where: { token: tkn, safariDate: assignment.safariDate },
+          });
+          if (!booking) continue;
+
+          const completedCount = tokenCompletedCounts.get(tkn) || 0;
+          if (completedCount >= (booking.totalSeats || 0)) {
+            booking.safariStatus = "completed";
+            await booking.save();
+          }
+        }
+      } catch (e) {
+        console.error("Booking completion update error:", e);
+        // Do not fail the main request due to auxiliary update
+      }
+    }
 
     res.json({
       success: true,

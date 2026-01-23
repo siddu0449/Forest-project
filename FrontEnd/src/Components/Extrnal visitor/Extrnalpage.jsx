@@ -1,15 +1,16 @@
 import { useState, useMemo, useEffect } from "react";
-import forestLogo from "../Images/Forest Logo.jpg";
-import externalImg from "../Images/extrnal img.jpg";
+import forestLogo from "../Images/Forest Logo.png";
+import externalImg from "../Images/extrnal img.png";
 
 const TIMER_DURATION = 15 * 60; // 15 minutes
 const SLOT_LIMIT = 60;
 
-const TIME_SLOTS = [
-  "10:00 - 12:00",
-  "12:00 - 14:00",
-  "14:00 - 16:00",
-  "16:00 - 18:00",
+// Default time slots - will be replaced by API data if available
+const DEFAULT_TIME_SLOTS = [
+  { timeSlot: "10:00 - 12:00", slotLimit: 60 },
+  { timeSlot: "12:00 - 14:00", slotLimit: 60 },
+  { timeSlot: "14:00 - 16:00", slotLimit: 60 },
+  { timeSlot: "16:00 - 18:00", slotLimit: 60 },
 ];
 
 /* ⏰ Check if slot is already started */
@@ -20,6 +21,7 @@ const isSlotExpiredByTime = (slot, safariDate) => {
 };
 
 export default function ExternalVisitor() {
+  const [timeSlots, setTimeSlots] = useState(DEFAULT_TIME_SLOTS);
   const [formData, setFormData] = useState({
     name: "",
     phone: "",
@@ -37,6 +39,23 @@ export default function ExternalVisitor() {
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
+  // Fetch active time slots from API
+  useEffect(() => {
+    const fetchTimeSlots = async () => {
+      try {
+        const response = await fetch(`${API_URL}/time-slots/active`);
+        const data = await response.json();
+        if (data.success && data.data.length > 0) {
+          setTimeSlots(data.data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch time slots:', error);
+        // Keep using default slots
+      }
+    };
+    fetchTimeSlots();
+  }, []);
+
   const visitorList =
     JSON.parse(localStorage.getItem("visitorList")) || [];
 
@@ -53,8 +72,11 @@ export default function ExternalVisitor() {
 
     const now = Date.now();
 
-    return TIME_SLOTS
-      .map((slot) => {
+    return timeSlots
+      .map((slotConfig) => {
+        const slot = slotConfig.timeSlot;
+        const slotLimit = slotConfig.slotLimit || SLOT_LIMIT;
+
         if (isSlotExpiredByTime(slot, formData.safariDate)) {
           return null;
         }
@@ -71,7 +93,7 @@ export default function ExternalVisitor() {
           )
           .reduce((sum, v) => sum + (v.totalSeats || 0), 0);
 
-        const remainingSeats = SLOT_LIMIT - usedSeats;
+        const remainingSeats = slotLimit - usedSeats;
 
         return {
           slot,
@@ -201,7 +223,7 @@ export default function ExternalVisitor() {
         </div>
 
         <h2 className="text-center font-bold text-green-800 mb-4">
-          EXTERNAL VISITOR SAFARI FORM
+          VISITOR SAFARI FORM
         </h2>
 
         {!submitted ? (

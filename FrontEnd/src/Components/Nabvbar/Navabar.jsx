@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { isLoggedIn, logout } from "../../utils/auth";
-import forestLogo from "../Images/Forest Logo.jpg";
+import forestLogo from "../Images/Forest Logo.png";
 
 export default function Navbar() {
   const navigate = useNavigate();
@@ -16,7 +16,7 @@ export default function Navbar() {
     className="h-8 w-8 sm:h-10 sm:w-10 md:h-12 md:w-12 object-contain mr-2 sm:mr-3"
   />
   <h1 className="text-sm sm:text-base md:text-lg lg:text-xl font-bold">
-    Karnataka State Forest Department
+    KALI TIGER RESERVE
   </h1>
 </div>
 

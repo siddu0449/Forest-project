@@ -1,4 +1,4 @@
-const { VisitorBooking, IndividualToken } = require("../models");
+const { VisitorBooking, IndividualToken, UnpaidBooking } = require("../models");
 const { Op } = require("sequelize");
 
 // Time slots configuration (10 AM to 6 PM)
@@ -77,11 +77,18 @@ exports.createBooking = async (req, res) => {
       });
     }
 
-    // Generate unique token for the date
-    const maxToken = await VisitorBooking.max("token", {
-      where: { safariDate },
-    });
-    const token = (maxToken || 0) + 1;
+  
+// Generate unique token for the date (exclude expired/unpaid)
+const maxTokenPaid = await VisitorBooking.max("token", {
+  where: { safariDate },
+});
+
+const maxTokenUnpaid = await UnpaidBooking.max("token", {
+  where: { safariDate },
+});
+
+const token = Math.max(maxTokenPaid || 0, maxTokenUnpaid || 0) + 1;
+
 
     // Set expiry time (15 minutes from now)
     const expiryTime = now + TIMER_DURATION;
@@ -170,7 +177,7 @@ exports.getAvailableSlots = async (req, res) => {
           remainingSeats,
           available: remainingSeats >= seatsNeeded,
         };
-      })
+      }),
     );
 
     res.status(200).json({
@@ -283,7 +290,7 @@ exports.assignIndividualTokens = async (req, res) => {
 exports.confirmPayment = async (req, res) => {
   try {
     const { bookingId } = req.params;
-    const { paymentMode } = req.body;
+    const { paymentMode, utrNumber } = req.body;
 
     const booking = await VisitorBooking.findByPk(bookingId);
 
@@ -303,6 +310,7 @@ exports.confirmPayment = async (req, res) => {
 
     booking.paymentDone = true;
     booking.paymentMode = paymentMode || "cash";
+    booking.utrNumber = utrNumber || null;
     booking.safariStatus = "confirmed";
     await booking.save();
 
@@ -332,24 +340,43 @@ exports.getAllBookings = async (req, res) => {
     if (safariDate) where.safariDate = safariDate;
     if (status) where.safariStatus = status;
 
+    // 1️⃣ PAID & ACTIVE BOOKINGS
     const bookings = await VisitorBooking.findAll({
       where,
-      include: [
-        {
-          model: IndividualToken,
-          as: "individualTokens",
-        },
-      ],
-      order: [
-        ["safariDate", "DESC"],
-        ["token", "ASC"],
-      ],
+      include: [{ model: IndividualToken, as: "individualTokens" }],
+      order: [["safariDate", "DESC"], ["token", "ASC"]],
     });
 
+    // 2️⃣ UNPAID / EXPIRED BOOKINGS
+    const unpaidBookings = await UnpaidBooking.findAll({
+      where: safariDate ? { safariDate } : {},
+      order: [["deletedAt", "DESC"]],
+    });
+
+    // 3️⃣ FORMAT unpaid bookings for frontend
+    const formattedUnpaid = unpaidBookings.map((ub) => ({
+      id: `unpaid-${ub.id}`,
+      token: ub.token,
+      name: ub.name,
+      phone: ub.phone,
+      email: ub.email,
+      safariDate: ub.safariDate,
+      timeSlot: ub.timeSlot,
+      adults: ub.adults,
+      children: ub.children,
+      totalSeats: ub.totalSeats,
+      paymentAmount: ub.totalAmount,
+      paymentDone: false,          // ⭐ IMPORTANT
+      paymentMode: null,
+      utrNumber: null,
+      safariStatus: "expired",
+    }));
+
+    // 4️⃣ SEND MERGED DATA
     res.status(200).json({
       success: true,
-      count: bookings.length,
-      data: bookings,
+      count: bookings.length + formattedUnpaid.length,
+      data: [...bookings, ...formattedUnpaid],
     });
   } catch (error) {
     console.error("Get all bookings error:", error);
@@ -360,6 +387,7 @@ exports.getAllBookings = async (req, res) => {
     });
   }
 };
+
 /**
  * Delete a booking (for expired bookings)
  */
@@ -376,6 +404,29 @@ exports.deleteBooking = async (req, res) => {
       });
     }
 
+    // Save to unpaid_bookings before deleting (if payment not done)
+   if (!booking.paymentDone) {
+  const [unpaidRecord, created] = await UnpaidBooking.findOrCreate({
+    where: { originalBookingId: booking.id },
+    defaults: {
+      originalBookingId: booking.id,
+      token: booking.token,
+      name: booking.name,
+      phone: booking.phone,
+      email: booking.email,
+      safariDate: booking.safariDate,
+      timeSlot: booking.timeSlot,
+      adults: booking.adults,
+      children: booking.children,
+      totalSeats: booking.totalSeats,
+      totalAmount: booking.paymentAmount,
+      deletedAt: new Date(),
+      reason: "Payment timeout - 15 minutes expired",
+    },
+  });
+}
+
+
     // Delete the booking (IndividualTokens will be deleted automatically due to CASCADE)
     await booking.destroy();
 
@@ -388,6 +439,149 @@ exports.deleteBooking = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to delete booking",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Get report data for a date range
+ */
+exports.getReport = async (req, res) => {
+  try {
+    const { fromDate, toDate } = req.query;
+
+    // Validate required parameters
+    if (!fromDate || !toDate) {
+      return res.status(400).json({
+        success: false,
+        message: "Both fromDate and toDate are required",
+      });
+    }
+
+    // Fetch all bookings within the date range
+    const bookings = await VisitorBooking.findAll({
+      where: {
+        safariDate: {
+          [Op.between]: [fromDate, toDate],
+        },
+        paymentDone: true, // Only get paid bookings
+      },
+    });
+
+    // Fetch unpaid/deleted bookings within the date range
+    const unpaidBookings = await UnpaidBooking.findAll({
+      where: {
+        safariDate: {
+          [Op.between]: [fromDate, toDate],
+        },
+      },
+      order: [["deletedAt", "DESC"]],
+    });
+
+    console.log(`📊 Report Query - Date Range: ${fromDate} to ${toDate}`);
+    console.log(`✅ Found ${bookings.length} paid bookings`);
+    console.log(`🚫 Found ${unpaidBookings.length} unpaid bookings`);
+    if (unpaidBookings.length > 0) {
+      console.log(
+        "Unpaid bookings:",
+        unpaidBookings.map((ub) => ({
+          token: ub.token,
+          name: ub.name,
+          safariDate: ub.safariDate,
+          totalAmount: ub.totalAmount,
+        })),
+      );
+    }
+
+    // Calculate statistics
+    const totalVisitors = bookings.length; // All are paid now
+    const paidBookings = bookings; // All bookings are paid
+
+    const totalSeats = paidBookings.reduce(
+      (sum, booking) => sum + (booking.totalSeats || 0),
+      0,
+    );
+    const totalPayments = paidBookings.reduce(
+      (sum, booking) => sum + (parseFloat(booking.paymentAmount) || 0),
+      0,
+    );
+    const paymentsCompleted = paidBookings.length;
+    const paymentsPending = 0; // No pending since we only fetch paid bookings
+
+    const totalAdults = paidBookings.reduce(
+      (sum, b) => sum + (b.adults || 0),
+      0,
+    );
+    const totalChildren = paidBookings.reduce(
+      (sum, b) => sum + (b.children || 0),
+      0,
+    );
+
+    // Group by time slot
+    const slotData = paidBookings.reduce((acc, v) => {
+      const slot = v.timeSlot || "Unknown";
+      if (!acc[slot]) {
+        acc[slot] = { count: 0, seats: 0, amount: 0 };
+      }
+      acc[slot].count += 1;
+      acc[slot].seats += parseInt(v.totalSeats) || 0;
+      acc[slot].amount += parseFloat(v.paymentAmount) || 0;
+      return acc;
+    }, {});
+
+    res.status(200).json({
+      success: true,
+      data: {
+        totalVisitors,
+        totalSeats,
+        totalPayments,
+        totalAdults,
+        totalChildren,
+        paymentsCompleted,
+        paymentsPending,
+        slotData,
+        bookings: bookings.map((b) => ({
+          id: b.id,
+          token: b.token,
+          name: b.name,
+          phone: b.phone,
+          email: b.email,
+          safariDate: b.safariDate,
+          timeSlot: b.timeSlot,
+          adults: b.adults,
+          children: b.children,
+          totalSeats: b.totalSeats,
+          paymentAmount: b.paymentAmount,
+          paymentDone: b.paymentDone,
+          paymentMode: b.paymentMode,
+          utrNumber: b.utrNumber,
+        })),
+        unpaidBookings: unpaidBookings.map((ub) => ({
+          token: ub.token,
+          name: ub.name,
+          phone: ub.phone,
+          email: ub.email,
+          safariDate: ub.safariDate,
+          timeSlot: ub.timeSlot,
+          adults: ub.adults,
+          children: ub.children,
+          totalSeats: ub.totalSeats,
+          totalAmount: ub.totalAmount,
+          deletedAt: ub.deletedAt,
+          reason: ub.reason,
+        })),
+        dateRange: {
+          from: fromDate,
+          to: toDate,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Get report error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch report data",
       error: error.message,
     });
   }

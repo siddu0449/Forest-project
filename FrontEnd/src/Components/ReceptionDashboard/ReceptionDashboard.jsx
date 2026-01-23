@@ -7,6 +7,7 @@ export default function ReceptionDashboard() {
   const [vehicles, setVehicles] = useState([]);
   const [availableDrivers, setAvailableDrivers] = useState([]);
   const [availableVehicles, setAvailableVehicles] = useState([]);
+  const [recordLogs, setRecordLogs] = useState([]);
   const [activeTab, setActiveTab] = useState("reception");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -18,6 +19,7 @@ export default function ReceptionDashboard() {
   useEffect(() => {
     fetchBookings();
     loadVehicles();
+    fetchRecordLogs();
   }, [selectedDate]);
 
   // Fetch available drivers/vehicles after vehicles are loaded
@@ -35,17 +37,34 @@ export default function ReceptionDashboard() {
       if (data.success) {
         // Filter out drivers currently on safari
         const driversOnSafari = vehicles
-          .filter(v => v.status === 'moved' || v.safariStatus === 'started')
+          .filter(v => (v.status === 'moved' || v.safariStatus === 'started') && v.safariStatus !== 'completed')
           .map(v => v.driverName);
         
         const availableDriversList = data.data.filter(driver => 
           !driversOnSafari.includes(driver.name)
         );
+
+        
         
         setAvailableDrivers(availableDriversList);
       }
     } catch (err) {
       console.error('Fetch drivers error:', err);
+    }
+  };
+
+  const fetchRecordLogs = async () => {
+    try {
+      const response = await fetch(`${API_URL}/record-logs?date=${selectedDate}`);
+      const data = await response.json();
+      if (data.success) {
+        setRecordLogs(data.data);
+      } else {
+        setRecordLogs([]);
+      }
+    } catch (err) {
+      console.error('Fetch record logs error:', err);
+      setRecordLogs([]);
     }
   };
 
@@ -105,6 +124,7 @@ export default function ReceptionDashboard() {
             paymentAmount: booking.paymentAmount,
             paymentDone: booking.paymentDone,
             paymentMode: booking.paymentMode || "",
+            utrNumber: booking.utrNumber || "",
             expired: booking.expired,
             timeLeft: timeLeft,
             vehicle: booking.vehicle,
@@ -374,7 +394,8 @@ export default function ReceptionDashboard() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          paymentMode: visitor.paymentMode
+          paymentMode: visitor.paymentMode,
+          utrNumber: visitor.utrNumber || null
         })
       });
 
@@ -402,6 +423,14 @@ export default function ReceptionDashboard() {
   const setPaymentMode = (id, mode) => {
     const updated = visitors.map(v =>
       v.id === id ? { ...v, paymentMode: mode } : v
+    );
+    setVisitors(updated);
+    localStorage.setItem("visitorList", JSON.stringify(updated));
+  };
+
+  const setUtrNumber = (id, utrNumber) => {
+    const updated = visitors.map(v =>
+      v.id === id ? { ...v, utrNumber } : v
     );
     setVisitors(updated);
     localStorage.setItem("visitorList", JSON.stringify(updated));
@@ -448,6 +477,9 @@ export default function ReceptionDashboard() {
       }
       
       setVehicles(updated);
+
+      // Record logs for each token in this vehicle
+      await createLogsForVehicle(vehicle, 'move_to_safari');
     } catch (error) {
       console.error('Move to safari error:', error);
       alert('Failed to move vehicle to safari');
@@ -476,9 +508,44 @@ export default function ReceptionDashboard() {
       
       setVehicles(updated);
       alert(`✓ Vehicle ${vehicle.vehicleNumber} moved to safari with ${vehicle.seatsFilled} passengers`);
+
+      // Record logs for each token in this vehicle
+      await createLogsForVehicle(vehicle, 'force_move_to_safari');
     } catch (error) {
       console.error('Force move error:', error);
       alert('Failed to move vehicle to safari');
+    }
+  };
+
+  // Helper: create record logs for a vehicle grouped by token
+  const createLogsForVehicle = async (vehicle, action) => {
+    try {
+      const grouped = (vehicle.passengers || []).reduce((acc, p) => {
+        acc[p.token] = (acc[p.token] || 0) + 1;
+        return acc;
+      }, {});
+
+      for (const [token, count] of Object.entries(grouped)) {
+        await fetch(`${API_URL}/record-logs`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            safariDate: vehicle.safariDate,
+            vehicleId: vehicle.vehicleId,
+            vehicleNumber: vehicle.vehicleNumber,
+            driverName: vehicle.driverName,
+            token,
+            personsCount: count,
+            runNumber: vehicle.runNumber,
+            action
+          })
+        });
+      }
+
+      // Refresh logs
+      await fetchRecordLogs();
+    } catch (err) {
+      console.error('Create record logs error:', err);
     }
   };
 
@@ -508,6 +575,17 @@ export default function ReceptionDashboard() {
         >
           Vehicle Dashboard
         </button>
+
+        <button
+          onClick={() => setActiveTab("recordlog")}
+          className={`px-4 py-2 rounded font-semibold ${
+            activeTab === "recordlog"
+              ? "bg-green-700 text-white"
+              : "bg-white border text-green-700"
+          }`}
+        >
+          Record Log
+        </button>
       </div>
 
       {/* -------------------- RECEPTION UI -------------------- */}
@@ -532,6 +610,48 @@ export default function ReceptionDashboard() {
               Refresh
             </button>
           </div>
+
+          {/* Summary Statistics Cards for Paid Visitors */}
+          {!loading && filteredVisitors.length > 0 && (() => {
+            const paidVisitors = filteredVisitors.filter(v => v.paymentDone);
+            const totalPaidTokens = paidVisitors.length;
+            const totalPaidSeats = paidVisitors.reduce((sum, v) => sum + (v.totalSeats || 0), 0);
+            const totalCollection = paidVisitors.reduce((sum, v) => sum + (parseFloat(v.paymentAmount) || 0), 0);
+
+            return (
+              <div className="flex gap-4 mb-6 flex-wrap">
+                <div className="flex-1 min-w-[250px] bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 text-white">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm opacity-90">Total Paid Tokens</p>
+                      <p className="text-3xl font-bold mt-1">{totalPaidTokens}</p>
+                    </div>
+                    <div className="text-4xl opacity-80">🎫</div>
+                  </div>
+                </div>
+
+                <div className="flex-1 min-w-[250px] bg-gradient-to-br from-green-500 to-green-600 rounded-lg shadow-lg p-6 text-white">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm opacity-90">Total Seats (Paid)</p>
+                      <p className="text-3xl font-bold mt-1">{totalPaidSeats}</p>
+                    </div>
+                    <div className="text-4xl opacity-80">💺</div>
+                  </div>
+                </div>
+
+                <div className="flex-1 min-w-[250px] bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg shadow-lg p-6 text-white">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm opacity-90">Total Collection</p>
+                      <p className="text-3xl font-bold mt-1">₹{totalCollection.toLocaleString()}</p>
+                    </div>
+                    <div className="text-4xl opacity-80">💰</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
           {loading && (
             <div className="text-center py-4 text-blue-600">
@@ -566,6 +686,7 @@ export default function ReceptionDashboard() {
                     <th className="p-2 border">Children</th>
                     <th className="p-2 border">Total Seats</th>
                     <th className="p-2 border">Payment Mode</th>
+                    <th className="p-2 border">UTR Number</th>
                     <th className="p-2 border">Amount (₹)</th>
                     <th className="p-2 border">Timer</th>
                     <th className="p-2 border">Payment Status</th>
@@ -598,6 +719,19 @@ export default function ReceptionDashboard() {
                             <option value="UPI">UPI</option>
                             <option value="Card">Card</option>
                           </select>
+                        )}
+                      </td>
+                      <td className="p-2 border">
+                        {v.paymentDone ? (
+                          <span className="text-gray-700 text-sm">{v.utrNumber || "-"}</span>
+                        ) : (
+                          <input
+                            type="text"
+                            value={v.utrNumber || ""}
+                            onChange={e => setUtrNumber(v.id, e.target.value)}
+                            placeholder="UTR/Ref No. (optional)"
+                            className="border p-1 rounded w-full text-sm"
+                          />
                         )}
                       </td>
                       <td className="p-2 border font-semibold">₹{v.paymentAmount}</td>
@@ -696,6 +830,8 @@ export default function ReceptionDashboard() {
             
             {filteredVisitors.filter(v => {
               if (!v.paymentDone) return false;
+              // Hide bookings that have fully completed safari
+              if (v.safariStatus === 'completed') return false;
               
               // Get all passengers assigned to this token across all vehicles
               const assignedPassengers = vehicles.flatMap(vehicle => 
@@ -726,6 +862,8 @@ export default function ReceptionDashboard() {
                 {filteredVisitors
                   .filter(v => {
                     if (!v.paymentDone) return false;
+                    // Hide bookings that have fully completed safari
+                    if (v.safariStatus === 'completed') return false;
                     
                     // Get all passengers assigned to this token across all vehicles
                     const assignedPassengers = vehicles.flatMap(vehicle => 
@@ -985,26 +1123,33 @@ export default function ReceptionDashboard() {
                             )}
                           </div>
                           
-                          <table className="w-full border mt-2 text-sm">
-                            <thead>
-                              <tr className="bg-gray-200">
-                                <th className="border p-2">Sub Token</th>
-                                <th className="border p-2">Name</th>
-                                <th className="border p-2">Phone</th>
-                                <th className="border p-2">Email</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {passengers.map(p => (
-                                <tr key={p.subToken}>
-                                  <td className="border p-2 text-center font-mono font-bold">{p.subToken}</td>
-                                  <td className="border p-2">{p.name}</td>
-                                  <td className="border p-2">{p.phone}</td>
-                                  <td className="border p-2 text-sm">{p.email}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                          <div className="overflow-x-auto w-full">
+  <table className="min-w-[650px] border mt-2 text-sm">
+    <thead>
+      <tr className="bg-gray-200">
+        <th className="border p-2 whitespace-nowrap">Sub Token</th>
+        <th className="border p-2 whitespace-nowrap">Name</th>
+        <th className="border p-2 whitespace-nowrap">Phone</th>
+        <th className="border p-2 whitespace-nowrap">Email</th>
+      </tr>
+    </thead>
+    <tbody>
+      {passengers.map(p => (
+        <tr key={p.subToken}>
+          <td className="border p-2 text-center font-mono font-bold whitespace-nowrap">
+            {p.subToken}
+          </td>
+          <td className="border p-2 whitespace-nowrap">{p.name}</td>
+          <td className="border p-2 whitespace-nowrap">{p.phone}</td>
+          <td className="border p-2 text-sm whitespace-nowrap">
+            {p.email}
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+</div>
+
                         </div>
                       ))}
 
@@ -1057,6 +1202,61 @@ export default function ReceptionDashboard() {
             </div>
           )}
           </div>
+        </div>
+      )}
+
+      {/* -------------------- RECORD LOG TAB -------------------- */}
+      {activeTab === "recordlog" && (
+        <div className="bg-white p-6 rounded shadow">
+          <h2 className="text-xl font-bold text-green-800 mb-4">Record Log</h2>
+          <div className="mb-4 flex gap-2 items-center">
+            <label className="font-semibold">Select Date:</label>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={e => setSelectedDate(e.target.value)}
+              className="border p-2 rounded"
+            />
+            <button
+              onClick={fetchRecordLogs}
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            >
+              Refresh Logs
+            </button>
+          </div>
+
+          {recordLogs.length === 0 ? (
+            <p className="text-gray-500">No logs found for {selectedDate}</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full border bg-white">
+                <thead className="bg-green-200">
+                  <tr>
+                    <th className="p-2 border">Time</th>
+                    <th className="p-2 border">Vehicle</th>
+                    <th className="p-2 border">Driver</th>
+                    <th className="p-2 border">Token</th>
+                    <th className="p-2 border">Persons</th>
+                    <th className="p-2 border">Action</th>
+                    <th className="p-2 border">Run</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recordLogs.map(log => (
+                    <tr key={log.id} className="text-center hover:bg-gray-50">
+                      <td className="p-2 border text-sm">{new Date(log.createdAt).toLocaleTimeString()}</td>
+                      <td className="p-2 border font-semibold">{log.vehicleNumber}</td>
+                      <td className="p-2 border">{log.driverName || '-'}</td>
+                      <td className="p-2 border">{log.token}</td>
+                      <td className="p-2 border">{log.personsCount}</td>
+                      <td className="p-2 border">{log.action.replaceAll('_',' ')}</td>
+                      <td className="p-2 border">{log.runNumber ?? '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
     </div>

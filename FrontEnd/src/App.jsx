@@ -8,6 +8,8 @@ import ReceptionDashboard from "./Components/ReceptionDashboard/ReceptionDashboa
 import GateDashboard from "./Components/GateDashboard/GateDashboard";
 import ManagerDashboard from "./Components/ManagerDashboard/ManagerDashboard";
 import ManageVehicleDriver from "./Components/ManagerDashboard/ManageVehicleDriver";
+import TimeSlotManagement from "./Components/ManagerDashboard/TimeSlotManagement";
+import ReportsAnalytics from "./Components/ManagerDashboard/ReportsAnalytics";
 import PasswordManagement from "./Components/ManagerDashboard/PasswordManagement";
 
 import { ROLES } from "./Components/constants/roles";
@@ -63,6 +65,24 @@ function App() {
           element={
             <ProtectedRoute role={ROLES.MANAGER}>
               <ManageVehicleDriver />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/manager/timeslots"
+          element={
+            <ProtectedRoute role={ROLES.MANAGER}>
+              <TimeSlotManagement />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/manager/reports"
+          element={
+            <ProtectedRoute role={ROLES.MANAGER}>
+              <ReportsAnalytics />
             </ProtectedRoute>
           }
         />

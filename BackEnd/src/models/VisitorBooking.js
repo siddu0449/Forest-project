@@ -68,6 +68,11 @@ const VisitorBooking = sequelize.define(
       type: DataTypes.STRING,
       allowNull: true,
     },
+    utrNumber: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: "UTR/Transaction reference number for UPI/online payments",
+    },
     vehicle: {
       type: DataTypes.STRING,
       allowNull: true,

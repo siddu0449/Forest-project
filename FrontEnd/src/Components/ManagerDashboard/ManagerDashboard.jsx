@@ -57,6 +57,7 @@ export default function ManagerDashboard() {
   const dateVisitors = useMemo(() => {
     const filtered = visitors.filter((v) => v.safariDate === selectedDate);
     
+    filtered.sort((a, b) => Number(a.token) - Number(b.token));
     // Merge vehicle assignment data into visitors
     return filtered.map(visitor => {
       // Find vehicle assignments that include this visitor's token
@@ -89,10 +90,10 @@ export default function ManagerDashboard() {
 
     const pending = totalVisitors - paid;
 
-    const totalSeats = dateVisitors.reduce((sum, v) => {
-      const seats = parseInt(v.totalSeats, 10);
-      return sum + (isNaN(seats) ? 0 : seats);
-    }, 0);
+    const totalSeats = dateVisitors
+  .filter(v => v.paymentDone)
+  .reduce((sum, v) => sum + (parseInt(v.totalSeats) || 0), 0);
+
 
     const totalAdults = dateVisitors.reduce((sum, v) => {
       return sum + (parseInt(v.adults) || 0);
@@ -114,16 +115,22 @@ export default function ManagerDashboard() {
     const pendingAmount = totalAmount - paidAmount;
 
     // Group by time slot
-    const slotData = dateVisitors.reduce((acc, v) => {
-      const slot = v.timeSlot || 'Unknown';
-      if (!acc[slot]) {
-        acc[slot] = { count: 0, seats: 0, amount: 0 };
-      }
-      acc[slot].count++;
-      acc[slot].seats += parseInt(v.totalSeats) || 0;
-      acc[slot].amount += parseFloat(v.paymentAmount) || 0;
-      return acc;
-    }, {});
+const slotData = dateVisitors
+  .filter(v => v.paymentDone)
+  .reduce((acc, v) => {
+    const slot = v.timeSlot || "Unknown";
+
+    if (!acc[slot]) {
+      acc[slot] = { count: 0, seats: 0, amount: 0 };
+    }
+
+    acc[slot].count += 1;
+    acc[slot].seats += parseInt(v.totalSeats) || 0;
+    acc[slot].amount += parseFloat(v.paymentAmount) || 0;
+
+    return acc;
+  }, {});
+
 
     return { 
       totalVisitors, 
@@ -181,15 +188,16 @@ export default function ManagerDashboard() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
-        <SummaryCard title="Visitors" value={summary.totalVisitors} />
+        <SummaryCard title="Visitors Token" value={summary.totalVisitors} />
         <SummaryCard title="Paid" value={summary.paid} color="green" />
         <SummaryCard title="Pending" value={summary.pending} color="red" />
         <SummaryCard title="Total Seats" value={summary.totalSeats} />
         <SummaryCard
-          title="Total Collection"
-          value={`₹${summary.totalAmount.toLocaleString()}`}
-          color="blue"
-        />
+  title="Total Collection"
+  value={`₹${summary.paidAmount.toLocaleString()}`}
+  color="blue"
+/>
+
       </div>
 
       {/* Time Slot Breakdown */}
@@ -221,6 +229,7 @@ export default function ManagerDashboard() {
               <th className="p-2 border">Seats</th>
               <th className="p-2 border">Payment</th>
               <th className="p-2 border">Mode</th>
+              <th className="p-2 border">UTR</th>
               <th className="p-2 border">Amount</th>
               <th className="p-2 border">Vehicle</th>
               <th className="p-2 border">Driver</th>
@@ -233,7 +242,8 @@ export default function ManagerDashboard() {
               const driver = v.driverName || "-";
 
               return (
-                <tr key={v.id} className="text-center">
+                <tr key={`${v.token}-${v.id}`} className="text-center">
+
                   <td className="p-2 border font-bold text-blue-700">
                     {v.token}
                   </td>
@@ -255,6 +265,9 @@ export default function ManagerDashboard() {
                   <td className="p-2 border">
                     {v.paymentMode || "-"}
                   </td>
+                  <td className="p-2 border text-xs">
+                    {v.utrNumber || "-"}
+                  </td>
                   <td className="p-2 border">
                     {v.paymentAmount
                       ? `₹${parseFloat(v.paymentAmount).toLocaleString()}`
@@ -269,7 +282,7 @@ export default function ManagerDashboard() {
             {dateVisitors.length === 0 && !loading && (
               <tr>
                 <td
-                  colSpan="10"
+                  colSpan="11"
                   className="p-4 text-center text-gray-500"
                 >
                   No data for selected date
